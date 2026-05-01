@@ -66,6 +66,8 @@ Simply run the project directly, and the system will automatically check and dow
 
 **Configuration**: Download settings are located in the `DOWNLOAD` section of `config.yml`, where you can modify the download source or file paths as needed.
 
+**Cloud GPU (e.g. Vast.ai), rsync from macOS**: full checklist — prefetch **`wav2lip.pth`** when `./models/` is not synced, Ollama on the instance, tunnels, smoke tests — see **[docs/VAST_E2E.md](docs/VAST_E2E.md)**.
+
 ### Manual Model Download (Alternative)
 If automatic download encounters network issues, you can also download manually:
 - HuggingFace <https://huggingface.co/shibing624/ai-avatar-wav2lip>

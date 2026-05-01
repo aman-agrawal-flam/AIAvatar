@@ -10,6 +10,9 @@
 #   ./scripts/setup_aiavt.sh
 #   INSTALL_OLLAMA=0 ./scripts/setup_aiavt.sh   # skip Homebrew ollama install (still runs ollama pull if ollama exists)
 #   AUTO_INSTALL_MICROMAMBA=0 ./scripts/setup_aiavt.sh   # fail if micromamba missing (no bootstrap)
+#   PREFETCH_ASSETS=0 ./scripts/setup_aiavt.sh           # skip wav2lip.pth + avatar HF downloads
+#   PREFETCH_ASSETS_EXTRA='--models-only' ./scripts/setup_aiavt.sh   # only wav2lip.pth (~215MB)
+#   INSTALL_OLLAMA_LINUX_AUTO=1 ./scripts/setup_aiavt.sh # Linux: curl ollama install.sh (Vast)
 #
 # Remote GPU (e.g. Vast.ai): on your laptop, push the repo first, then SSH and run this here:
 #   ./scripts/rsync_to_vast.sh   # or set SSH_HOST / SSH_PORT for your instance
@@ -83,6 +86,15 @@ echo "==> pip install -r requirements.txt"
 micromamba run -n "${ENV_NAME}" python -m pip install -U pip setuptools wheel
 micromamba run -n "${ENV_NAME}" pip install -r "${ROOT}/requirements.txt"
 
+# wav2lip.pth + avatar zips — rsync excludes /models/ and /data/; prefetch here for GPU hosts.
+if [[ "${PREFETCH_ASSETS:-1}" == "1" ]]; then
+  echo "==> Prefetch HF assets (wav2lip.pth + avatars). PREFETCH_ASSETS=0 to skip."
+  echo "    Models-only: PREFETCH_ASSETS_EXTRA='--models-only'"
+  micromamba run -n "${ENV_NAME}" python "${ROOT}/scripts/download_assets.py" ${PREFETCH_ASSETS_EXTRA:-} || {
+    echo "WARNING: prefetch failed (network?). main.py will retry downloads on first run."
+  }
+fi
+
 OLLAMA_MODEL="$(SETUP_ROOT="${ROOT}" python3 - <<'PY'
 import os, re, pathlib
 root = os.environ["SETUP_ROOT"]
@@ -123,9 +135,18 @@ install_ollama_linux() {
     echo "==> Skipping Ollama install (INSTALL_OLLAMA=0)."
     return 0
   fi
+  if [[ "${INSTALL_OLLAMA_LINUX_AUTO:-0}" == "1" ]]; then
+    echo "==> INSTALL_OLLAMA_LINUX_AUTO=1: running https://ollama.com/install.sh"
+    curl -fsSL https://ollama.com/install.sh | sh || {
+      echo "WARNING: Ollama install script failed."
+      return 0
+    }
+    return 0
+  fi
   echo "==> Linux: install Ollama with:"
   echo "    curl -fsSL https://ollama.com/install.sh | sh"
-  echo "    (re-run this script after install), or set INSTALL_OLLAMA=0 if you install it yourself."
+  echo "    Or auto: INSTALL_OLLAMA_LINUX_AUTO=1 ./scripts/setup_aiavt.sh"
+  echo "    (re-run after install), or set INSTALL_OLLAMA=0 to silence this."
 }
 
 case "$(uname -s)" in

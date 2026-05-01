@@ -26,8 +26,8 @@ fi
 
 rsync -avz --progress \
   -e "ssh -p ${SSH_PORT} -i ${SSH_KEY} -o StrictHostKeyChecking=accept-new" \
-  --exclude 'data/' \
-  --exclude 'models/' \
+  --exclude '/data/' \
+  --exclude '/models/' \
   --exclude '__pycache__/' \
   --exclude '*.pyc' \
   "${ROOT}/" \
