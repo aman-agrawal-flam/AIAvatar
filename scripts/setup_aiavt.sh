@@ -160,6 +160,28 @@ case "$(uname -s)" in
   Darwin) export PATH="/opt/homebrew/bin:/usr/local/bin:${PATH}" ;;
 esac
 
+# Docker/Vast images often have no systemd after install.sh — ollama binary exists but nothing listens on :11434.
+ensure_ollama_serve_linux() {
+  [[ "$(uname -s)" != "Linux" ]] && return 0
+  command -v ollama &>/dev/null || return 0
+  if curl -fsS --connect-timeout 2 http://127.0.0.1:11434/api/tags >/dev/null 2>&1; then
+    return 0
+  fi
+  echo "==> Ollama installed but API not up (no systemd?). Starting: nohup ollama serve"
+  nohup ollama serve >/tmp/ollama-serve.log 2>&1 &
+  local i
+  for i in $(seq 1 15); do
+    if curl -fsS --connect-timeout 1 http://127.0.0.1:11434/api/tags >/dev/null 2>&1; then
+      echo "==> Ollama listening on 127.0.0.1:11434"
+      return 0
+    fi
+    sleep 1
+  done
+  echo "WARNING: ollama serve did not become ready; check /tmp/ollama-serve.log"
+}
+
+ensure_ollama_serve_linux
+
 if command -v ollama &>/dev/null; then
   echo "==> ollama pull ${OLLAMA_MODEL} (first download can take several minutes)"
   ollama pull "${OLLAMA_MODEL}" || {
