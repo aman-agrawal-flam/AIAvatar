@@ -141,3 +141,5 @@ logs/
 a.py
 
 .config.yml
+/data/wav2lip_avatar_female_model
+/data
