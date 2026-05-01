@@ -12,7 +12,7 @@
 #   AUTO_INSTALL_MICROMAMBA=0 ./scripts/setup_aiavt.sh   # fail if micromamba missing (no bootstrap)
 #   PREFETCH_ASSETS=0 ./scripts/setup_aiavt.sh           # skip wav2lip.pth + avatar HF downloads
 #   PREFETCH_ASSETS_EXTRA='--models-only' ./scripts/setup_aiavt.sh   # only wav2lip.pth (~215MB)
-#   INSTALL_OLLAMA_LINUX_AUTO=1 ./scripts/setup_aiavt.sh # Linux: curl ollama install.sh (Vast)
+#   INSTALL_OLLAMA_LINUX_AUTO=1 ./scripts/setup_aiavt.sh # Linux: runs ollama install.sh inside setup (do not add "or curl ... | sh")
 #
 # Remote GPU (e.g. Vast.ai): on your laptop, push the repo first, then SSH and run this here:
 #   ./scripts/rsync_to_vast.sh   # or set SSH_HOST / SSH_PORT for your instance
@@ -22,6 +22,13 @@
 #   AIAVT_SKIP_RSYNC_HINT=1 ./scripts/setup_aiavt.sh   # omit the rsync reminder on Linux
 #
 set -euo pipefail
+
+if [[ "${1:-}" == "or" ]]; then
+  echo "error: Remove 'or curl ... | sh' from the command line." >&2
+  echo "  Use only: INSTALL_OLLAMA_LINUX_AUTO=1 ./scripts/setup_aiavt.sh" >&2
+  echo "  (That flag runs Ollama install.sh inside this script; piping its output to sh breaks.)" >&2
+  exit 1
+fi
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_NAME="${MAMBA_ENV_NAME:-aiavt}"
@@ -193,8 +200,13 @@ fi
 
 echo ""
 echo "Done."
+echo "  # Fresh SSH shells need the hook once per session (matches this script's MAMBA_ROOT_PREFIX):"
+echo "  export MAMBA_ROOT_PREFIX=\"${MAMBA_ROOT_PREFIX}\""
+echo "  export PATH=\"${HOME}/.local/bin:\${PATH}\""
+echo "  eval \"\$(micromamba shell hook --shell bash)\""
 echo "  micromamba activate ${ENV_NAME}"
-echo "  cd \"${ROOT}\""
-echo "  ./run.sh"
+echo "  cd \"${ROOT}\" && ./run.sh"
+echo "  # Or skip activate:"
+echo "  cd \"${ROOT}\" && micromamba run -n ${ENV_NAME} ./run.sh"
 echo ""
 echo "config.yml expects Ollama at http://127.0.0.1:11434/v1 and model \"${OLLAMA_MODEL}\"."

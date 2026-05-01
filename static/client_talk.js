@@ -2,6 +2,9 @@
  * AI Avatar WebRTC 客户端 - Talk 页面版本
  */
 
+/** STUN — needed when the tab is not on the same LAN as the Python host (SSH tunnel, remote GPU). */
+const WEBRTC_ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }];
+
 class AvatarClient {
     constructor() {
         // WebRTC 相关
@@ -118,7 +121,7 @@ class AvatarClient {
             // 创建 RTCPeerConnection
             this.pc = new RTCPeerConnection({
                 sdpSemantics: 'unified-plan',
-                iceServers: []
+                iceServers: WEBRTC_ICE_SERVERS,
             });
 
             // 监听远程视频流

@@ -1,5 +1,6 @@
 var pc = null;
 var dc = null; // 数据通道
+var WEBRTC_ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }];
 
 function negotiate() {
     pc.addTransceiver('video', { direction: 'recvonly' });
@@ -46,7 +47,7 @@ function negotiate() {
 function start() {
     var config = {
         sdpSemantics: 'unified-plan',
-        iceServers: []
+        iceServers: WEBRTC_ICE_SERVERS
     };
 
     pc = new RTCPeerConnection(config);
