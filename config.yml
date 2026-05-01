@@ -1,11 +1,16 @@
+# Local LLM (Ollama) + Edge TTS (no Doubao / no DashScope).
+#   Ollama: https://ollama.com — `ollama serve` then `ollama pull llama3.2` (match LLM_MODEL_NAME).
+#   TTS: pip install edge-tts; ffmpeg on PATH. (Edge TTS still uses Microsoft’s network; speech is not fully offline.)
+#   First-run wav2lip downloads still use HuggingFace (DOWNLOAD).
+
 LLM:
-  LLM_API_KEY: "xxx"
-  LLM_BASE_URL: "https://dashscope.aliyuncs.com/compatible-mode/v1"
-  LLM_MODEL_NAME: "qwen-plus"  # 可选: qwen-plus, qwen-max, qwen-turbo, gpt-4, gpt-3.5-turbo 等
+  LLM_API_KEY: "ollama"
+  LLM_BASE_URL: "http://127.0.0.1:11434/v1"
+  LLM_MODEL_NAME: "llama3.2"
 
 TTS:
-  DOUBAO_APPID: "xxx"
-  DOUBAO_TOKEN: "xxx"
+  DOUBAO_APPID: ""
+  DOUBAO_TOKEN: ""
 
 DOWNLOAD:
   BASE_URL: "https://huggingface.co/shibing624/ai-avatar-wav2lip/resolve/main"
@@ -46,8 +51,8 @@ AVATARS:
       avatar_dir: "wav2lip_avatar_female_model"
       image: "/data/wav2lip_avatar_female_model/full_imgs/00000000.png"
       tts_config:
-        type: "doubao"
-        voice: "zh_female_sajiaonvyou_moon_bigtts"
+        type: "edgetts"
+        voice: "zh-CN-XiaoxiaoNeural"
     
     - id: "ai_girlfriend"
       name: "AI 女友"
@@ -55,8 +60,8 @@ AVATARS:
       avatar_dir: "wav2lip_avatar_long_hair_girl"
       image: "/data/wav2lip_avatar_long_hair_girl/full_imgs/00000000.png"
       tts_config:
-        type: "doubao"
-        voice: "zh_female_tianmeixiaoyuan_moon_bigtts" 
+        type: "edgetts"
+        voice: "zh-CN-XiaoyiNeural"
     
     - id: "ai_assistant"
       name: "AI 助手"
@@ -64,6 +69,6 @@ AVATARS:
       avatar_dir: "wav2lip_avatar_glass_man"
       image: "/data/wav2lip_avatar_glass_man/full_imgs/00000000.png"
       tts_config:
-        type: "doubao"
-        voice: "ICL_zh_male_hanhoudunshi_tob"
+        type: "edgetts"
+        voice: "zh-CN-YunxiNeural"
 

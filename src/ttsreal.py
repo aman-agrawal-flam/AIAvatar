@@ -365,6 +365,75 @@ class DoubaoTTS(BaseTTS):
 
 
 ###########################################################################################
+class EdgeTTS(BaseTTS):
+    """Edge Read Aloud via edge-tts (no API key; uses Microsoft Edge online service)."""
+
+    def __init__(self, opt, parent):
+        super().__init__(opt, parent)
+        self.voice = getattr(opt, "REF_FILE", None) or "zh-CN-XiaoxiaoNeural"
+        logger.info(f"EdgeTTS voice: {self.voice}")
+
+    def _mp3_to_pcm_s16le_16k(self, mp3: bytes) -> bytes:
+        import shutil
+        import subprocess
+
+        ff = shutil.which("ffmpeg")
+        if not ff:
+            raise RuntimeError("ffmpeg not found on PATH (required for EdgeTTS decode)")
+        return subprocess.run(
+            [ff, "-loglevel", "error", "-i", "pipe:0", "-f", "s16le", "-ac", "1", "-ar", "16000", "pipe:1"],
+            input=mp3,
+            capture_output=True,
+            check=True,
+        ).stdout
+
+    async def edge_voice(self, text: str):
+        import edge_tts
+
+        communicate = edge_tts.Communicate(text, self.voice)
+        mp3 = bytearray()
+        async for chunk in communicate.stream():
+            if chunk["type"] == "audio" and chunk["data"]:
+                mp3.extend(chunk["data"])
+        if not mp3:
+            return
+        pcm = self._mp3_to_pcm_s16le_16k(bytes(mp3))
+        # yield int16 mono chunks for stream_tts
+        step = self.chunk * 2
+        for i in range(0, len(pcm), step):
+            yield pcm[i : i + step]
+
+    def txt_to_audio(self, msg: tuple[str, dict]):
+        text, _textevent = msg
+        asyncio.new_event_loop().run_until_complete(self.stream_tts(self.edge_voice(text), msg))
+
+    async def stream_tts(self, audio_stream, msg: tuple[str, dict]):
+        text, textevent = msg
+        first = True
+        last_stream = np.array([], dtype=np.float32)
+        async for chunk in audio_stream:
+            if chunk is not None and len(chunk) > 0:
+                stream = np.frombuffer(chunk, dtype=np.int16).astype(np.float32) / 32767
+                stream = np.concatenate((last_stream, stream))
+                streamlen = stream.shape[0]
+                idx = 0
+                while streamlen >= self.chunk:
+                    eventpoint = {}
+                    if first:
+                        eventpoint = {"status": "start", "text": text}
+                        eventpoint.update(**textevent)
+                        first = False
+                    current_frame = stream[idx : idx + self.chunk]
+                    self.parent.put_audio_frame(current_frame, eventpoint)
+                    streamlen -= self.chunk
+                    idx += self.chunk
+                last_stream = stream[idx:]
+        eventpoint = {"status": "end", "text": text}
+        eventpoint.update(**textevent)
+        self.parent.put_audio_frame(np.zeros(self.chunk, np.float32), eventpoint)
+
+
+###########################################################################################
 class AzureTTS(BaseTTS):
     CHUNK_SIZE = 640  # 16kHz, 20ms, 16-bit Mono PCM size
 

@@ -19,12 +19,21 @@ import uuid
 import os
 from typing import Dict
 
+from openai import AuthenticationError
+
 from src.webrtc import HumanPlayer
 from src.basereal import BaseReal
 from src.llm import llm_response
 from src.log import logger
 from src.get_file import http_get
-from src.config import get_model_download_config, get_avatar_download_config, get_avatars_config, get_avatar_config
+from src.config import (
+    get_model_download_config,
+    get_avatar_download_config,
+    get_avatars_config,
+    get_avatar_config,
+    get_llm_base_url,
+    get_llm_model_name,
+)
 
 app = Flask(__name__)
 nerfreals: Dict[int, BaseReal] = {}  # sessionid:BaseReal
@@ -217,7 +226,30 @@ async def human(request):
         if params['type'] == 'echo':
             nerfreals[sessionid].put_msg_txt(params['text'])
         elif params['type'] == 'chat':
-            asyncio.get_event_loop().run_in_executor(None, llm_response, params['text'], nerfreals[sessionid])
+            fut = asyncio.get_event_loop().run_in_executor(
+                None, llm_response, params['text'], nerfreals[sessionid]
+            )
+
+            def _log_llm_error(f):
+                try:
+                    f.result()
+                except AuthenticationError as e:
+                    bu = get_llm_base_url() or ""
+                    if "dashscope.aliyuncs.com" in bu:
+                        logger.warning(
+                            "LLM 401: invalid DashScope LLM_API_KEY (base_url=%s) — %s", bu, e
+                        )
+                    else:
+                        logger.warning(
+                            "LLM 401: check local LLM (e.g. `ollama pull %s`) and LLM_BASE_URL=%s — %s",
+                            get_llm_model_name(),
+                            bu,
+                            e,
+                        )
+                except Exception:
+                    logger.exception("LLM request failed")
+
+            fut.add_done_callback(_log_llm_error)
 
         return web.Response(
             content_type="application/json",
@@ -399,9 +431,9 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', type=int, default=64, help="infer batch")
     parser.add_argument('--customvideo_config', type=str, default='', help="custom action json")
 
-    parser.add_argument('--tts', type=str, default='doubao3',
-                        help="tts service type")  # tencent doubao azuretts doubao3
-    parser.add_argument('--REF_FILE', type=str, default="zh_female_santongyongns_saturn_bigtts",
+    parser.add_argument('--tts', type=str, default='edgetts',
+                        help="tts: tencent|doubao|doubao3|azuretts|edgetts (edgetts: edge-tts+ffmpeg, no Doubao key)")
+    parser.add_argument('--REF_FILE', type=str, default="zh-CN-XiaoxiaoNeural",
                         help="参考音频文件名或语音模型ID，默认值为 edgetts的语音模型ID zh-CN-YunxiaNeural, 若--tts指定为azuretts, 可以使用Azure语音模型ID, 如zh-CN-XiaoxiaoMultilingualNeural,"
                              "doubao的音色列表：https://www.volcengine.com/docs/6561/1257544 选择语音合成模型1.0音色列表, doubao3选择2.0音色列表")
     parser.add_argument('--REF_TEXT', type=str, default=None)

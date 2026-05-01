@@ -1,3 +1,4 @@
+import os
 import time
 from collections import deque
 from openai import OpenAI
@@ -6,14 +7,35 @@ from src.log import logger
 from src.config import get_llm_api_key, get_llm_base_url, get_llm_model_name
 
 
-api_key = get_llm_api_key()
-base_url = get_llm_base_url()
+def _is_local_openai_base(url: str) -> bool:
+    u = (url or "").lower()
+    return any(h in u for h in ("localhost", "127.0.0.1", "0.0.0.0"))
+
+
+def _resolve_llm_api_key() -> str:
+    """Use a dummy key for local OpenAI-compatible servers (Ollama, LM Studio, vLLM) when unset."""
+    raw = (get_llm_api_key() or "").strip()
+    base = (get_llm_base_url() or "").strip()
+    placeholder = not raw or raw.lower() in (
+        "xxx",
+        "placeholder",
+        "changeme",
+        "your-api-key-here",
+        "none",
+    )
+    if placeholder and _is_local_openai_base(base):
+        return (os.environ.get("LLM_API_KEY") or "ollama").strip() or "ollama"
+    return raw
+
+
+api_key = _resolve_llm_api_key()
+base_url = (get_llm_base_url() or "").strip() or None
 model_name = get_llm_model_name()
-show_api_key = api_key[:10] + "..."
-client = OpenAI(
-    api_key=api_key,
-    base_url=base_url,
-)
+if api_key and len(api_key) >= 8:
+    show_api_key = api_key[:4] + "…" + api_key[-2:]
+else:
+    show_api_key = api_key or "(empty)"
+client = OpenAI(api_key=api_key or "ollama", base_url=base_url)
 logger.debug(f"llm api_key: {show_api_key}, llm base_url: {base_url}, llm model: {model_name}")
 
 # 全局对话历史管理
@@ -100,12 +122,15 @@ def llm_response(message, nerfreal: BaseReal, session_id=None):
     messages = build_messages(session_id, message)
     
     start = time.perf_counter()
-    completion = client.chat.completions.create(
-        model=model_name,  # 使用配置文件中的模型名称
+    create_kw = dict(
+        model=model_name,
         messages=messages,
         stream=True,
-        stream_options={"include_usage": True}
     )
+    # Ollama / many local proxies reject stream_options
+    if not _is_local_openai_base(base_url or ""):
+        create_kw["stream_options"] = {"include_usage": True}
+    completion = client.chat.completions.create(**create_kw)
     
     result = ""
     assistant_response = ""  # 完整的助手响应

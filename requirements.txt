@@ -1,5 +1,7 @@
 tqdm
 scipy
+loguru
+six
 
 face_alignment
 numba
@@ -23,3 +25,4 @@ librosa
 openai
 websockets
 pyyaml
+edge-tts
