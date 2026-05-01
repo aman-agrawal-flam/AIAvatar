@@ -1,17 +1,17 @@
 # Micromamba/conda env for AIAvatar (name: aiavt)
 # Bootstrap: ./scripts/setup_aiavt.sh
-# Linux + NVIDIA: after create, optionally run:
-#   micromamba install -n aiavt pytorch-cuda=12.4 -c nvidia -y
-# macOS uses CPU/MPS builds from the pytorch channel (no CUDA package).
+#
+# Use conda-forge only for torch stack so the solver stays consistent on Linux + GPU
+# and macOS (CPU/MPS). setup_aiavt.sh passes --channel-priority flexible (micromamba
+# defaults to strict after its own install.sh, which breaks multi-channel torch solves).
 name: aiavt
 channels:
-  - pytorch
   - conda-forge
 dependencies:
   - python=3.10
-  - pytorch==2.5.0
-  - torchvision==0.20.0
-  - torchaudio==2.5.0
+  - pytorch=2.5.1
+  - torchvision=0.20.1
+  - torchaudio=2.5.1
   - pip
   - ffmpeg
   - pip:

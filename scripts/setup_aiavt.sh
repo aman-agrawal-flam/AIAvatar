@@ -3,32 +3,80 @@
 #   - Creates or updates conda env from environment-aiavt.yml + requirements.txt
 #   - Optionally installs Ollama (macOS + Homebrew) and pulls the LLM from config.yml
 #
+# micromamba is NOT in apt. If missing, this script installs the official binary to
+#   ~/.local/bin (non-interactive) unless AUTO_INSTALL_MICROMAMBA=0.
+#
 # Usage:
 #   ./scripts/setup_aiavt.sh
 #   INSTALL_OLLAMA=0 ./scripts/setup_aiavt.sh   # skip Homebrew ollama install (still runs ollama pull if ollama exists)
+#   AUTO_INSTALL_MICROMAMBA=0 ./scripts/setup_aiavt.sh   # fail if micromamba missing (no bootstrap)
+#
+# Remote GPU (e.g. Vast.ai): on your laptop, push the repo first, then SSH and run this here:
+#   ./scripts/rsync_to_vast.sh   # or set SSH_HOST / SSH_PORT for your instance
+#   ssh -p <PORT> -i ~/.ssh/id_ed25519 root@<HOST>
+#   cd ~/AIAvatar && ./scripts/setup_aiavt.sh
+#
+#   AIAVT_SKIP_RSYNC_HINT=1 ./scripts/setup_aiavt.sh   # omit the rsync reminder on Linux
 #
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_NAME="${MAMBA_ENV_NAME:-aiavt}"
-PREFIX="${MAMBA_ROOT_PREFIX:-${HOME}/micromamba}/envs/${ENV_NAME}"
+export MAMBA_ROOT_PREFIX="${MAMBA_ROOT_PREFIX:-${HOME}/micromamba}"
+PREFIX="${MAMBA_ROOT_PREFIX}/envs/${ENV_NAME}"
+MICROMAMBA_BIN="${MICROMAMBA_BIN:-${HOME}/.local/bin/micromamba}"
 
 cd "$ROOT"
 
-if ! command -v micromamba &>/dev/null; then
-  echo "micromamba not found. Install: https://mamba.readthedocs.io/en/latest/installation/micromamba-installation.html"
-  exit 1
+if [[ "$(uname -s)" == "Linux" ]] && [[ -z "${AIAVT_SKIP_RSYNC_HINT:-}" ]]; then
+  echo "==> Tip: after editing on your Mac, run ./scripts/rsync_to_vast.sh before setup so this copy stays current."
 fi
+
+ensure_micromamba() {
+  if command -v micromamba &>/dev/null; then
+    return 0
+  fi
+  if [[ -x "${MICROMAMBA_BIN}" ]]; then
+    export PATH="$(dirname "${MICROMAMBA_BIN}"):${PATH}"
+    return 0
+  fi
+  if [[ "${AUTO_INSTALL_MICROMAMBA:-1}" == "0" ]]; then
+    echo "micromamba not found. Install: https://mamba.readthedocs.io/en/latest/installation/micromamba-installation.html" >&2
+    echo "Or run without AUTO_INSTALL_MICROMAMBA=0 to auto-install to ~/.local/bin" >&2
+    exit 1
+  fi
+  if ! command -v curl &>/dev/null && ! command -v wget &>/dev/null; then
+    echo "Need curl or wget to bootstrap micromamba. E.g. apt-get update && apt-get install -y curl" >&2
+    exit 1
+  fi
+  echo "==> micromamba not found; installing official binary to ${HOME}/.local/bin (INIT_YES=no)..."
+  mkdir -p "${HOME}/.local/bin"
+  export BIN_FOLDER="${HOME}/.local/bin"
+  export INIT_YES="${MICROMAMBA_INIT_YES:-no}"
+  export CONDA_FORGE_YES=yes
+  curl -fsSL https://micro.mamba.pm/install.sh | sh
+  export PATH="${BIN_FOLDER}:${PATH}"
+  if ! command -v micromamba &>/dev/null; then
+    echo "micromamba still not on PATH after install; add ${BIN_FOLDER} to PATH" >&2
+    exit 1
+  fi
+}
+
+ensure_micromamba
 
 echo "==> Project: ${ROOT}"
 echo "==> Micromamba env: ${ENV_NAME} (prefix: ${PREFIX})"
 
+# micromamba's install.sh sets channel_priority strict; flexible avoids unsatisfiable torch stacks.
+MAMBA_ENV_FLAGS=(--channel-priority flexible)
+
 if [[ -d "${PREFIX}" ]]; then
   echo "==> Updating existing env ${ENV_NAME}..."
-  micromamba env update -n "${ENV_NAME}" -f "${ROOT}/environment-aiavt.yml" -y
+  # env update has no --channel-priority; `update` does.
+  micromamba update -n "${ENV_NAME}" -f "${ROOT}/environment-aiavt.yml" -y "${MAMBA_ENV_FLAGS[@]}"
 else
   echo "==> Creating env ${ENV_NAME}..."
-  micromamba env create -f "${ROOT}/environment-aiavt.yml" -y
+  micromamba env create -f "${ROOT}/environment-aiavt.yml" -y "${MAMBA_ENV_FLAGS[@]}"
 fi
 
 echo "==> pip install -r requirements.txt"
